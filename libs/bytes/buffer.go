@@ -4,22 +4,28 @@ import (
 	"sync"
 )
 
+// Buffer is a byte array.
 type Buffer struct {
 	buf  []byte
 	next *Buffer // next free buffer
 }
 
+// Bytes return buffer's underly byte array.
 func (b *Buffer) Bytes() []byte {
 	return b.buf
 }
 
 // Pool is a buffer pool.
 type Pool struct {
-	lock sync.Mutex
-	free *Buffer
-	max  int
-	num  int
-	size int
+	lock     sync.Mutex
+	free     *Buffer
+	max      int //当前设置内存大小
+	num      int //当前设置buffer数
+	size     int //当前设置buffer size
+	totalMax int
+	freeMax  int
+	totalNum int
+	freeNum  int
 }
 
 // NewPool new a memory buffer pool struct.
@@ -35,33 +41,46 @@ func (p *Pool) Init(num, size int) {
 	return
 }
 
-// init init the memory buffer.
+// init init or new allocate the memory buffer.
 func (p *Pool) init(num, size int) {
+	p.lock.Lock()
+
+	//更新当前设置
 	p.num = num
-	p.size = size
+	if p.size == 0 {
+		//只能设置一次size
+		p.size = size
+	}
 	p.max = num * size
+
+	//new buffers
 	p.grow()
+	p.lock.Unlock()
 }
 
 // grow grow the memory buffer size, and update free pointer.
 func (p *Pool) grow() {
 	var (
-		i   int
 		b   *Buffer
 		bs  []Buffer
 		buf []byte
 	)
 	buf = make([]byte, p.max)
 	bs = make([]Buffer, p.num)
-	p.free = &bs[0]
-	b = p.free
-	for i = 1; i < p.num; i++ {
-		b.buf = buf[(i-1)*p.size : i*p.size]
-		b.next = &bs[i]
-		b = b.next
+	//p.free = nil
+	for i := p.num - 1; i >= 0; i-- {
+		b = &bs[i]
+		b.buf = buf[i*p.size : (i+1)*p.size]
+		b.next = p.free
+		p.free = b
 	}
-	b.buf = buf[(i-1)*p.size : i*p.size]
-	b.next = nil
+
+	//更新统计
+	p.totalMax += p.max
+	p.freeMax += p.max
+	p.totalNum += p.num
+	p.freeNum += p.num
+
 	return
 }
 
@@ -73,6 +92,10 @@ func (p *Pool) Get() (b *Buffer) {
 		b = p.free
 	}
 	p.free = b.next
+	//更新统计
+	p.freeMax -= p.size
+	p.freeNum--
+
 	p.lock.Unlock()
 	return
 }
@@ -82,6 +105,9 @@ func (p *Pool) Put(b *Buffer) {
 	p.lock.Lock()
 	b.next = p.free
 	p.free = b
+	//更新统计
+	p.freeMax += p.size
+	p.freeNum++
 	p.lock.Unlock()
 	return
 }
