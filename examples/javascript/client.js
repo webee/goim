@@ -16,7 +16,7 @@
         var heartbeatInterval;
 
         function connect() {
-            var ws = new WebSocket('ws://localhost:8090/sub');
+            var ws = new WebSocket('ws://localhost:9090/sub');
             var auth = false;
 
             ws.onopen = function() {
@@ -46,7 +46,7 @@
 
             function heartbeat() {
                 ws.send(JSON.stringify({
-                    'ver': 1,
+                    'ver': 102,
                     'op': 2,
                     'seq': 2,
                     'body': {}
@@ -55,7 +55,7 @@
 
             function getAuth() {
                 ws.send(JSON.stringify({
-                    'ver': 1,
+                    'ver': 102,
                     'op': 7,
                     'seq': 1,
                     'body': {
